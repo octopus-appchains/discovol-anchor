@@ -1,15 +1,31 @@
 use crate::permissionless_actions::AppchainMessagesProcessingContext;
 use crate::*;
-use crate::{interfaces::SudoActions, message_decoder::AppchainMessage};
-
+use crate::{appchain_messages::AppchainMessage, interfaces::SudoActions};
+use codec::Decode;
 use near_contract_standards::fungible_token::metadata::FungibleTokenMetadata;
 
 #[near_bindgen]
 impl SudoActions for AppchainAnchor {
     //
-    fn stage_appchain_messages(&mut self, messages: Vec<AppchainMessage>) {
+    fn set_owner_pk(&mut self, public_key: PublicKey) {
         self.assert_owner();
-        self.internal_stage_appchain_messages(messages);
+        self.owner_pk = public_key;
+    }
+    //
+    fn stage_appchain_message(&mut self, appchain_message: AppchainMessage) {
+        self.assert_owner();
+        let mut processing_status = self.permissionless_actions_status.get().unwrap();
+        let mut appchain_messages = self.appchain_messages.get().unwrap();
+        appchain_messages.insert_message(&appchain_message);
+        self.appchain_messages.set(&appchain_messages);
+        processing_status.max_nonce_of_staged_appchain_messages = appchain_messages.max_nonce();
+        self.permissionless_actions_status.set(&processing_status);
+    }
+    //
+    fn stage_appchain_encoded_messages(&mut self, encoded_messages: Vec<u8>) {
+        self.assert_owner();
+        let messages = Decode::decode(&mut &encoded_messages[..]).unwrap();
+        self.internal_stage_appchain_messages(&messages);
     }
     //
     fn set_metadata_of_wrapped_appchain_token(&mut self, metadata: FungibleTokenMetadata) {
@@ -26,7 +42,7 @@ impl SudoActions for AppchainAnchor {
     ) {
         self.assert_owner();
         let mut wrapped_appchain_token = self.wrapped_appchain_token.get().unwrap();
-        wrapped_appchain_token.premined_beneficiary = premined_beneficiary;
+        wrapped_appchain_token.premined_beneficiary = Some(premined_beneficiary);
         wrapped_appchain_token.premined_balance = premined_balance;
         self.wrapped_appchain_token.set(&wrapped_appchain_token);
     }
@@ -77,13 +93,6 @@ impl SudoActions for AppchainAnchor {
             }
             self.next_validator_set.set(&next_validator_set);
         }
-    }
-    //
-    fn clear_anchor_event_histories(&mut self) {
-        self.assert_owner();
-        let mut anchor_event_histories = self.anchor_event_histories.get().unwrap();
-        anchor_event_histories.clear();
-        self.anchor_event_histories.set(&anchor_event_histories);
     }
     //
     fn clear_appchain_notification_histories(&mut self) {

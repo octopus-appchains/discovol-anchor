@@ -1,11 +1,19 @@
 use borsh::maybestd::collections::HashMap;
-use near_contract_standards::fungible_token::metadata::FungibleTokenMetadata;
+use near_contract_standards::{
+    fungible_token::metadata::FungibleTokenMetadata,
+    non_fungible_token::metadata::NFTContractMetadata,
+};
 
 use crate::*;
 
 pub trait AnchorViewer {
-    /// Get version of this contract
+    /// Get version of this contract.
     fn get_anchor_version(&self) -> String;
+    /// Get the template type of corresponding appchain.
+    fn get_appchain_template_type(&self) -> AppchainTemplateType;
+    /// Get the public key of owner account.
+    /// This key will be used in creation of wrapped appchain NFT contract.
+    fn get_owner_pk(&self) -> PublicKey;
     /// Get anchor settings detail.
     fn get_anchor_settings(&self) -> AnchorSettings;
     /// Get appchain settings detail.
@@ -18,6 +26,8 @@ pub trait AnchorViewer {
     fn get_wrapped_appchain_token(&self) -> WrappedAppchainToken;
     /// Get info of near fungible tokens which has registered in this contract.
     fn get_near_fungible_tokens(&self) -> Vec<NearFungibleToken>;
+    /// Get info of wrapped appchain NFT contracts which has registered in this contract.
+    fn get_wrapped_appchain_nfts(&self) -> Vec<WrappedAppchainNFT>;
     /// Get state of corresponding appchain.
     fn get_appchain_state(&self) -> AppchainState;
     /// Get current status of anchor.
@@ -37,20 +47,6 @@ pub trait AnchorViewer {
     /// If the paran `index` is smaller than the start index, or bigger than the end index
     /// stored in anchor, or there is no history in anchor yet, `Option::None` will be returned.
     fn get_staking_history(&self, index: Option<U64>) -> Option<StakingHistory>;
-    /// Get the index range of anchor events stored in anchor.
-    fn get_index_range_of_anchor_event_history(&self) -> IndexRange;
-    /// Get anchor event by index.
-    /// If the param `index `is omitted, the latest event will be returned.
-    /// If the paran `index` is smaller than the start index, or bigger than the end index
-    /// stored in anchor, or there is no event in anchor yet, `Option::None` will be returned.
-    fn get_anchor_event_history(&self, index: Option<U64>) -> Option<AnchorEventHistory>;
-    /// Get anchor event by start index and quantity.
-    /// If the param `quantity` is omitted, up to 50 events will be returned.
-    fn get_anchor_event_histories(
-        &self,
-        start_index: U64,
-        quantity: Option<U64>,
-    ) -> Vec<AnchorEventHistory>;
     /// Get the index range of appchain notification histories stored in anchor.
     fn get_index_range_of_appchain_notification_history(&self) -> IndexRange;
     /// Get appchain notification by index.
@@ -201,8 +197,6 @@ pub trait OwnerActions {
     ///
     fn remove_staking_history_before(&mut self, index: U64);
     ///
-    fn remove_anchor_event_history_before(&mut self, index: U64);
-    ///
     fn remove_appchain_notification_history_before(&mut self, index: U64);
 }
 
@@ -231,6 +225,18 @@ pub trait PermissionlessActions {
     fn process_appchain_messages(&mut self) -> MultiTxsOperationProcessingResult;
     ///
     fn commit_appchain_challenge(&mut self, appchain_challenge: AppchainChallenge);
+    //
+    fn process_appchain_messages_with_all_proofs(
+        &mut self,
+        signed_commitment: Vec<u8>,
+        validator_proofs: Vec<ValidatorMerkleProof>,
+        mmr_leaf_for_mmr_root: Vec<u8>,
+        mmr_proof_for_mmr_root: Vec<u8>,
+        encoded_messages: Vec<u8>,
+        header: Vec<u8>,
+        mmr_leaf_for_header: Vec<u8>,
+        mmr_proof_for_header: Vec<u8>,
+    );
 }
 
 pub trait ProtocolSettingsManager {
@@ -277,6 +283,8 @@ pub trait AppchainSettingsManager {
     fn set_subql_endpoint(&mut self, subql_endpoint: String);
     ///
     fn set_era_reward(&mut self, era_reward: U128);
+    ///
+    fn set_bonus_for_new_validator(&mut self, bonus_amount: U128);
 }
 
 pub trait AnchorSettingsManager {
@@ -321,8 +329,12 @@ pub trait StakingManager {
 }
 
 pub trait SudoActions {
+    ///
+    fn set_owner_pk(&mut self, public_key: PublicKey);
     /// Apply a certain `AppchainMessage`
-    fn stage_appchain_messages(&mut self, appchain_messages: Vec<AppchainMessage>);
+    fn stage_appchain_message(&mut self, appchain_message: AppchainMessage);
+    ///
+    fn stage_appchain_encoded_messages(&mut self, encoded_messages: Vec<u8>);
     ///
     fn set_metadata_of_wrapped_appchain_token(&mut self, metadata: FungibleTokenMetadata);
     ///
@@ -339,8 +351,6 @@ pub trait SudoActions {
     fn refresh_user_staking_histories(&mut self);
     ///
     fn reset_next_validator_set_to(&mut self, era_number: U64);
-    ///
-    fn clear_anchor_event_histories(&mut self);
     ///
     fn clear_appchain_notification_histories(&mut self);
     ///
@@ -408,4 +418,19 @@ pub trait WrappedAppchainTokenManager {
     fn set_price_of_wrapped_appchain_token(&mut self, price: U128);
     ///
     fn burn_wrapped_appchain_token(&self, receiver_id: String, amount: U128);
+}
+
+pub trait WrappedAppchainNFTManager {
+    ///
+    fn register_wrapped_appchain_nft(&mut self, class_id: String, metadata: NFTContractMetadata);
+    ///
+    fn change_wrapped_appchain_nft_contract_metadata(
+        &mut self,
+        class_id: String,
+        metadata: NFTContractMetadata,
+    );
+    ///
+    fn open_bridging_of_wrapped_appchain_nft(&mut self, class_id: String);
+    ///
+    fn close_bridging_of_wrapped_appchain_nft(&mut self, class_id: String);
 }
