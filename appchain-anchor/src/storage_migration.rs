@@ -113,11 +113,11 @@ pub struct OldAppchainAnchor {
     /// The state of the corresponding appchain.
     appchain_state: AppchainState,
     /// The staking history data happened in this contract.
-    staking_histories: LazyOption<LookupArray<OldStakingHistory>>,
+    staking_histories: LazyOption<LookupArray<StakingHistory>>,
     /// The anchor event history data.
     anchor_event_histories: LazyOption<LookupArray<OldAnchorEventHistory>>,
     /// The appchain notification history data.
-    appchain_notification_histories: LazyOption<LookupArray<OldAppchainNotificationHistory>>,
+    appchain_notification_histories: LazyOption<LookupArray<AppchainNotificationHistory>>,
     /// The status of permissionless actions.
     permissionless_actions_status: LazyOption<PermissionlessActionsStatus>,
     /// The state of beefy light client
@@ -169,16 +169,8 @@ impl AppchainAnchor {
             anchor_settings: old_contract.anchor_settings,
             protocol_settings: old_contract.protocol_settings,
             appchain_state: old_contract.appchain_state,
-            staking_histories: LazyOption::new(
-                StorageKey::StakingHistories.into_bytes(),
-                Some(&LookupArray::new(StorageKey::StakingHistoriesMap)),
-            ),
-            appchain_notification_histories: LazyOption::new(
-                StorageKey::AppchainNotificationHistories.into_bytes(),
-                Some(&LookupArray::new(
-                    StorageKey::AppchainNotificationHistoriesMap,
-                )),
-            ),
+            staking_histories: old_contract.staking_histories,
+            appchain_notification_histories: old_contract.appchain_notification_histories,
             permissionless_actions_status: old_contract.permissionless_actions_status,
             beefy_light_client_state: old_contract.beefy_light_client_state,
             reward_distribution_records: old_contract.reward_distribution_records,
@@ -212,13 +204,14 @@ impl AppchainAnchor {
                 &StorageKey::StakingHistoriesMap,
                 &index,
             )) {
-                let old_version = OldStakingHistory::try_from_slice(&old_data).unwrap();
-                env::storage_write(
-                    &get_storage_key_in_lookup_array(&StorageKey::StakingHistoriesMap, &index),
-                    &StakingHistory::from_old_version(old_version)
-                        .try_to_vec()
-                        .unwrap(),
-                );
+                if let Ok(old_version) = OldStakingHistory::try_from_slice(&old_data) {
+                    env::storage_write(
+                        &get_storage_key_in_lookup_array(&StorageKey::StakingHistoriesMap, &index),
+                        &StakingHistory::from_old_version(old_version)
+                            .try_to_vec()
+                            .unwrap(),
+                    );
+                }
             }
         }
         MultiTxsOperationProcessingResult::Ok
@@ -242,17 +235,17 @@ impl AppchainAnchor {
                 &StorageKey::AppchainNotificationHistoriesMap,
                 &index,
             )) {
-                let old_version =
-                    OldAppchainNotificationHistory::try_from_slice(&old_data).unwrap();
-                env::storage_write(
-                    &get_storage_key_in_lookup_array(
-                        &StorageKey::AppchainNotificationHistoriesMap,
-                        &index,
-                    ),
-                    &AppchainNotificationHistory::from_old_version(old_version)
-                        .try_to_vec()
-                        .unwrap(),
-                );
+                if let Ok(old_version) = OldAppchainNotificationHistory::try_from_slice(&old_data) {
+                    env::storage_write(
+                        &get_storage_key_in_lookup_array(
+                            &StorageKey::AppchainNotificationHistoriesMap,
+                            &index,
+                        ),
+                        &AppchainNotificationHistory::from_old_version(old_version)
+                            .try_to_vec()
+                            .unwrap(),
+                    );
+                }
             }
         }
         MultiTxsOperationProcessingResult::Ok
@@ -275,13 +268,14 @@ impl AppchainAnchor {
                 &StorageKey::AppchainMessageMap,
                 &nonce,
             )) {
-                let old_version = OldAppchainMessage::try_from_slice(&old_data).unwrap();
-                env::storage_write(
-                    &get_storage_key_in_lookup_array(&StorageKey::AppchainMessageMap, &nonce),
-                    &AppchainMessage::from_old_version(old_version)
-                        .try_to_vec()
-                        .unwrap(),
-                );
+                if let Ok(old_version) = OldAppchainMessage::try_from_slice(&old_data) {
+                    env::storage_write(
+                        &get_storage_key_in_lookup_array(&StorageKey::AppchainMessageMap, &nonce),
+                        &AppchainMessage::from_old_version(old_version)
+                            .try_to_vec()
+                            .unwrap(),
+                    );
+                }
             }
         }
         MultiTxsOperationProcessingResult::Ok
@@ -298,7 +292,7 @@ impl OldAppchainAnchor {
         let mut anchor_event_histories = self.anchor_event_histories.get().unwrap();
         let result = anchor_event_histories.clear();
         self.anchor_event_histories.set(&anchor_event_histories);
-        if result.eq(&MultiTxsOperationProcessingResult::Ok) {
+        if result.is_ok() {
             self.anchor_event_histories.remove();
         } else {
             panic!("Should clear old anchor events first.");
@@ -312,8 +306,12 @@ impl IndexedAndClearable for OldAnchorEventHistory {
         self.index = U64::from(*index);
     }
     //
-    fn clear_extra_storage(&mut self) {
-        ()
+    fn clear_extra_storage(&mut self) -> MultiTxsOperationProcessingResult {
+        if env::used_gas() > Gas::ONE_TERA.mul(T_GAS_CAP_FOR_MULTI_TXS_PROCESSING) {
+            MultiTxsOperationProcessingResult::NeedMoreGas
+        } else {
+            MultiTxsOperationProcessingResult::Ok
+        }
     }
 }
 
@@ -323,8 +321,12 @@ impl IndexedAndClearable for OldAppchainNotificationHistory {
         self.index = U64::from(*index);
     }
     //
-    fn clear_extra_storage(&mut self) {
-        ()
+    fn clear_extra_storage(&mut self) -> MultiTxsOperationProcessingResult {
+        if env::used_gas() > Gas::ONE_TERA.mul(T_GAS_CAP_FOR_MULTI_TXS_PROCESSING) {
+            MultiTxsOperationProcessingResult::NeedMoreGas
+        } else {
+            MultiTxsOperationProcessingResult::Ok
+        }
     }
 }
 
@@ -334,8 +336,12 @@ impl IndexedAndClearable for OldStakingHistory {
         self.index = U64::from(*index);
     }
     //
-    fn clear_extra_storage(&mut self) {
-        ()
+    fn clear_extra_storage(&mut self) -> MultiTxsOperationProcessingResult {
+        if env::used_gas() > Gas::ONE_TERA.mul(T_GAS_CAP_FOR_MULTI_TXS_PROCESSING) {
+            MultiTxsOperationProcessingResult::NeedMoreGas
+        } else {
+            MultiTxsOperationProcessingResult::Ok
+        }
     }
 }
 

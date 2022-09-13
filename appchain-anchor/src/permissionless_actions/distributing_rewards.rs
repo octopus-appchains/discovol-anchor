@@ -82,7 +82,7 @@ impl AppchainAnchor {
             appchain_message_nonce,
             processing_context,
         );
-        if result.eq(&MultiTxsOperationProcessingResult::Ok) {
+        if result.is_ok() {
             result = MultiTxsOperationProcessingResult::NeedMoreGas;
         }
         result
@@ -170,16 +170,17 @@ impl AppchainAnchor {
                     if unprofitable_validator_index.0
                         >= unprofitable_validators.len().try_into().unwrap()
                     {
-                        processing_context.clear_distributing_reward_era_number();
                         validator_set
                             .set_processing_status(ValidatorSetProcessingStatus::Completed);
                         validator_set_histories.insert(&era_number, &validator_set);
-                        return MultiTxsOperationProcessingResult::Ok;
+                        return MultiTxsOperationProcessingResult::NeedMoreGas;
                     }
                     let validator_id = unprofitable_validators
                         .get(usize::try_from(unprofitable_validator_index.0).unwrap())
                         .unwrap();
-                    if next_validator_set.contains_validator(validator_id) {
+                    if validator_set.contains_validator(validator_id)
+                        && next_validator_set.contains_validator(validator_id)
+                    {
                         let start_checking_index = match era_number
                             >= u64::from(protocol_settings.maximum_allowed_unprofitable_era_count)
                         {
@@ -224,7 +225,19 @@ impl AppchainAnchor {
                 validator_set_histories.insert(&era_number, &validator_set);
                 MultiTxsOperationProcessingResult::NeedMoreGas
             }
-            ValidatorSetProcessingStatus::Completed => MultiTxsOperationProcessingResult::Ok,
+            ValidatorSetProcessingStatus::Completed => {
+                self.record_appchain_message_processing_result(
+                    &AppchainMessageProcessingResult::Ok {
+                        nonce: processing_context.processing_nonce().unwrap_or(0),
+                        message: Some(format!(
+                            "Completed distributing era rewards for validator set '{}'.",
+                            era_number
+                        )),
+                    },
+                );
+                processing_context.clear_distributing_reward_era_number();
+                MultiTxsOperationProcessingResult::Ok
+            }
         }
     }
     //

@@ -14,18 +14,18 @@ pub enum PayloadType {
 #[derive(Clone, Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct BurnAssetPayload {
-    token_id: String,
-    sender: String,
-    receiver_id: AccountId,
-    amount: u128,
+    pub token_id: String,
+    pub sender: String,
+    pub receiver_id: AccountId,
+    pub amount: u128,
 }
 
 #[derive(Clone, Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct LockPayload {
-    sender: String,
-    receiver_id: AccountId,
-    amount: u128,
+    pub sender: String,
+    pub receiver_id: AccountId,
+    pub amount: u128,
 }
 
 #[derive(Clone, Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
@@ -81,9 +81,9 @@ pub enum MessagePayload {
 
 #[derive(Encode, Decode, Clone)]
 pub struct RawMessage {
-    nonce: u64,
-    payload_type: PayloadType,
-    payload: Vec<u8>,
+    pub nonce: u64,
+    pub payload_type: PayloadType,
+    pub payload: Vec<u8>,
 }
 
 impl RawMessage {
@@ -98,8 +98,12 @@ impl IndexedAndClearable for u32 {
         ()
     }
     //
-    fn clear_extra_storage(&mut self) {
-        ()
+    fn clear_extra_storage(&mut self) -> MultiTxsOperationProcessingResult {
+        if env::used_gas() > Gas::ONE_TERA.mul(T_GAS_CAP_FOR_MULTI_TXS_PROCESSING) {
+            MultiTxsOperationProcessingResult::NeedMoreGas
+        } else {
+            MultiTxsOperationProcessingResult::Ok
+        }
     }
 }
 
@@ -293,7 +297,7 @@ impl AppchainAnchor {
                         raw_message.nonce as u32,
                         &AppchainMessageProcessingResult::Error {
                             nonce: raw_message.nonce as u32,
-                            message: format!("Failed to deserialize raw message paylod: {}", err),
+                            message: format!("Failed to deserialize raw message payload: {}", err),
                         },
                     ),
                 }
