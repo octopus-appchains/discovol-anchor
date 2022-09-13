@@ -224,8 +224,10 @@ impl PermissionlessActions for AppchainAnchor {
                 panic!("Failed in verifying appchain messages: {:?}", err);
             }
         }
-        let messages = Decode::decode(&mut &encoded_messages[..]).unwrap();
-        self.internal_stage_appchain_messages(&messages);
+        match Decode::decode(&mut &encoded_messages[..]) {
+            Ok(messages) => self.internal_stage_appchain_messages(&messages),
+            Err(err) => panic!("Failed to decode messages: {}", err),
+        }
     }
     //
     fn process_appchain_messages(&mut self) -> MultiTxsOperationProcessingResult {
@@ -286,7 +288,7 @@ impl PermissionlessActions for AppchainAnchor {
         self.permissionless_actions_status
             .set(processing_context.processing_status());
         self.validator_set_histories.set(&validator_set_histories);
-        if result.eq(&MultiTxsOperationProcessingResult::Ok)
+        if result.is_ok()
             && processing_context.latest_applied_nonce() < processing_context.max_nonce()
         {
             result = MultiTxsOperationProcessingResult::NeedMoreGas;

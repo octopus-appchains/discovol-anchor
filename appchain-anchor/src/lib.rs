@@ -1,6 +1,6 @@
 mod anchor_viewer;
 pub mod appchain_challenge;
-mod appchain_messages;
+pub mod appchain_messages;
 mod assets;
 pub mod interfaces;
 mod lookup_array;
@@ -613,8 +613,12 @@ impl IndexedAndClearable for AppchainNotificationHistory {
         self.index = U64::from(*index);
     }
     //
-    fn clear_extra_storage(&mut self) {
-        ()
+    fn clear_extra_storage(&mut self) -> MultiTxsOperationProcessingResult {
+        if env::used_gas() > Gas::ONE_TERA.mul(T_GAS_CAP_FOR_MULTI_TXS_PROCESSING) {
+            MultiTxsOperationProcessingResult::NeedMoreGas
+        } else {
+            MultiTxsOperationProcessingResult::Ok
+        }
     }
 }
 
@@ -624,8 +628,12 @@ impl IndexedAndClearable for StakingHistory {
         self.index = U64::from(*index);
     }
     //
-    fn clear_extra_storage(&mut self) {
-        ()
+    fn clear_extra_storage(&mut self) -> MultiTxsOperationProcessingResult {
+        if env::used_gas() > Gas::ONE_TERA.mul(T_GAS_CAP_FOR_MULTI_TXS_PROCESSING) {
+            MultiTxsOperationProcessingResult::NeedMoreGas
+        } else {
+            MultiTxsOperationProcessingResult::Ok
+        }
     }
 }
 
@@ -635,7 +643,11 @@ impl IndexedAndClearable for AppchainChallenge {
         ()
     }
     //
-    fn clear_extra_storage(&mut self) {
-        ()
+    fn clear_extra_storage(&mut self) -> MultiTxsOperationProcessingResult {
+        if env::used_gas() > Gas::ONE_TERA.mul(T_GAS_CAP_FOR_MULTI_TXS_PROCESSING) {
+            MultiTxsOperationProcessingResult::NeedMoreGas
+        } else {
+            MultiTxsOperationProcessingResult::Ok
+        }
     }
 }
